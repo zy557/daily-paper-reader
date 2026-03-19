@@ -18,7 +18,19 @@ class GenerateDocsMetaParseTest(unittest.TestCase):
                 def __init__(self, *args, **kwargs):
                     pass
 
+            class DummyLLMClient:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+            class DummyClientFactory:
+                @staticmethod
+                def from_env():
+                    return DummyLLMClient()
+
             llm_stub.BltClient = DummyBltClient
+            llm_stub.LLMClient = DummyLLMClient
+            llm_stub.ClientFactory = DummyClientFactory
+            llm_stub.GenericClient = DummyLLMClient
             sys.modules["llm"] = llm_stub
 
         src_path = root / "src" / "6.generate_docs.py"
