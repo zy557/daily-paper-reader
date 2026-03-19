@@ -354,6 +354,24 @@ class OllamaClient(LLMClient):
         super().__init__(api_key=api_key, model=model, base_url=base_url)
 
 
+class GenericClient(LLMClient):
+    """任意 OpenAI 兼容接口，通过 model name、base_url、api_key 接入。
+
+    示例::
+
+        client = GenericClient(
+            api_key="sk-...",
+            model="gpt-4o",
+            base_url="https://api.openai.com/v1",
+        )
+    """
+
+    def __init__(self, api_key: str, model: str, base_url: str):
+        if not base_url:
+            raise ValueError("GenericClient 需要提供 base_url")
+        super().__init__(api_key=api_key, model=model, base_url=base_url)
+
+
 class BltClient(LLMClient):
     """BLT（柏拉图）网关，OpenAI Chat Completions 兼容接口。"""
     def __init__(self, api_key: str, model: str, base_url: str = None):
@@ -461,13 +479,17 @@ def parse_provider_model(model_str: str) -> Tuple[str, str]:
     解析模型字符串为 (provider, model)。
 
     规则：第一个 '/' 之前为提供商（大小写不敏感），之后的全部为模型名（大小写敏感，允许包含 '/').
+    若字符串不含 '/'，则视为纯模型名，provider 返回空字符串。
     示例：
     - "deepseek/deepseek-chat" -> ("deepseek", "deepseek-chat")
     - "SiliconFlow/Qwen/Qwen3-8B" -> ("siliconflow", "Qwen/Qwen3-8B")
     - "ollama/llama3.1:8b" -> ("ollama", "llama3.1:8b")
+    - "gpt-4o" -> ("", "gpt-4o")
     """
-    if not isinstance(model_str, str) or '/' not in model_str:
-        raise ValueError("缺少模型提供商：请使用 'provider/model' 格式，例如 'CSTCloud/gpt-oss-120b'")
+    if not isinstance(model_str, str):
+        raise ValueError("model_str 必须为字符串")
+    if '/' not in model_str:
+        return '', model_str
     provider, model = model_str.split('/', 1)
     return provider.lower(), model
 
@@ -479,14 +501,17 @@ class ClientFactory:
         基于环境变量创建具体客户端。
 
         必填：
-        - LLM_MODEL：形如 'provider/model'。
+        - LLM_MODEL：模型名称，支持以下格式：
+          - 'provider/model'，例如 'deepseek/deepseek-chat'
+          - 'openai/gpt-4o'、'generic/my-model' 或任意未知 provider（需同时设置 LLM_BASE_URL）
+          - 纯模型名称，例如 'gpt-4o'（需同时设置 LLM_BASE_URL 和 LLM_API_KEY）
         选填：
         - LLM_API_KEY：通用 API key（优先级高于各 provider 专用 key）
-        - LLM_BASE_URL：通用 base_url（优先级高于默认 base_url）
+        - LLM_BASE_URL：通用 base_url（优先级高于默认 base_url；使用纯模型名或自定义 provider 时必填）
         """
         model_env = (os.getenv('LLM_MODEL') or '').strip()
         if not model_env:
-            raise ValueError("缺少必要环境变量: LLM_MODEL（格式为 'provider/model'）")
+            raise ValueError("缺少必要环境变量: LLM_MODEL")
 
         provider, model = parse_provider_model(model_env)
         api_key = (os.getenv('LLM_API_KEY') or '').strip() or None
@@ -505,7 +530,13 @@ class ClientFactory:
             return BltClient(api_key=api_key or os.getenv('BLT_API_KEY', ''), model=model, base_url=base_url or os.getenv('BLT_API_BASE', 'https://api.bltcy.ai/v1'))
         if provider in ('cstcloud', 'cst', 'cst-cloud', 'keji', 'keji-yun'):
             return CSTCloudClient(api_key=api_key or os.getenv('CSTCLOUD_API_KEY', ''), model=model, base_url=base_url or 'https://uni-api.cstcloud.cn/v1')
-        raise ValueError(f"不支持的提供商: {provider}，请使用 'deepseek'、'siliconflow'、'blt'、'cstcloud' 或 'ollama'")
+        # 通用/自定义 OpenAI 兼容接口：provider 为空（纯模型名）或任意未知 provider
+        # 此时必须提供 LLM_BASE_URL
+        if not base_url:
+            raise ValueError(
+                f"使用自定义模型（LLM_MODEL='{model_env}'）时，必须同时设置 LLM_BASE_URL 指向 OpenAI 兼容接口地址"
+            )
+        return GenericClient(api_key=api_key or '', model=model, base_url=base_url)
 
     @staticmethod
     def from_config(_config: dict | None = None):

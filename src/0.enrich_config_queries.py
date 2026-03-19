@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # 自动补全 config.yaml 中的 related / rewrite 字段：
-# - keywords 缺少 related 时，调用 BLT gpt-4o-mini 生成相关词
-# - llm_queries 缺少 rewrite 时，调用 BLT gpt-4o-mini 生成英文改写
+# - keywords 缺少 related 时，调用 LLM 生成相关词
+# - llm_queries 缺少 rewrite 时，调用 LLM 生成英文改写
 
 import os
 import json
@@ -10,12 +10,12 @@ from typing import Any, Dict, List
 
 import yaml  # type: ignore
 
-from llm import BltClient
+from llm import BltClient, LLMClient, ClientFactory
 
 SCRIPT_DIR = os.path.dirname(__file__)
 CONFIG_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "config.yaml"))
 
-MODEL_NAME = os.getenv("BLT_REWRITE_MODEL", "gemini-3-flash-preview")
+MODEL_NAME = os.getenv("LLM_REWRITE_MODEL") or os.getenv("BLT_REWRITE_MODEL") or "gemini-3-flash-preview"
 
 def log(message: str) -> None:
   ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -106,7 +106,7 @@ def build_rewrite_prompt(query: str) -> List[Dict[str, str]]:
   ]
 
 
-def call_llm_json(client: BltClient, messages: List[Dict[str, str]], schema_name: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+def call_llm_json(client: LLMClient, messages: List[Dict[str, str]], schema_name: str, schema: Dict[str, Any]) -> Dict[str, Any]:
   response_format = {
     "type": "json_schema",
     "json_schema": {
@@ -136,9 +136,13 @@ def main() -> None:
     if not os.path.exists(CONFIG_FILE):
         raise FileNotFoundError(f"找不到 config.yaml：{CONFIG_FILE}")
 
-    api_key = os.getenv("BLT_API_KEY")
-    if not api_key:
-        raise RuntimeError("缺少 BLT_API_KEY 环境变量，无法调用 BLT。")
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("BLT_API_KEY") or ""
+    llm_model_env = os.getenv("LLM_MODEL", "").strip()
+    if not api_key and not llm_model_env:
+        raise RuntimeError(
+            "缺少 LLM 配置：请设置 LLM_MODEL + LLM_API_KEY + LLM_BASE_URL（通用接入），"
+            "或设置 BLT_API_KEY（柏拉图接入）"
+        )
 
     group_start("Step 0.0 - load config")
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -149,7 +153,10 @@ def main() -> None:
     keywords = subs.get("keywords") or []
     llm_queries = subs.get("llm_queries") or []
 
-    client = BltClient(api_key=api_key, model=MODEL_NAME)
+    if llm_model_env:
+        client: LLMClient = ClientFactory.from_env()
+    else:
+        client = BltClient(api_key=api_key, model=MODEL_NAME)
 
     related_schema = {
       "type": "object",

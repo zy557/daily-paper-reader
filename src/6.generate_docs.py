@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Tuple
 
 import fitz  # PyMuPDF
 import requests
-from llm import BltClient
+from llm import BltClient, LLMClient, ClientFactory
 
 SCRIPT_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
@@ -25,18 +25,25 @@ CONFIG_FILE = os.path.join(ROOT_DIR, "config.yaml")
 TODAY_STR = str(os.getenv("DPR_RUN_DATE") or "").strip() or datetime.now(timezone.utc).strftime("%Y%m%d")
 RANGE_DATE_RE = re.compile(r"^(\d{8})-(\d{8})$")
 
-# LLM 配置（使用 llm.py 内的 BLT 客户端）
+# LLM 配置：优先使用通用环境变量（LLM_MODEL + LLM_API_KEY + LLM_BASE_URL），回退到 BLT_API_KEY
 BLT_API_KEY = os.getenv("BLT_API_KEY")
-BLT_MODEL = os.getenv("BLT_SUMMARY_MODEL", "gemini-3-flash-preview")
-LLM_CLIENT = None
-if BLT_API_KEY:
+BLT_MODEL = os.getenv("LLM_SUMMARY_MODEL") or os.getenv("BLT_SUMMARY_MODEL") or "gemini-3-flash-preview"
+LLM_CLIENT: LLMClient | None = None
+_llm_model_env = os.getenv("LLM_MODEL", "").strip()
+if _llm_model_env:
+    try:
+        LLM_CLIENT = ClientFactory.from_env()
+    except Exception as _llm_init_err:
+        print(f"[WARN] 初始化 LLM 客户端失败（LLM_MODEL={_llm_model_env!r}）：{_llm_init_err}", flush=True)
+        LLM_CLIENT = None
+elif BLT_API_KEY:
     LLM_CLIENT = BltClient(api_key=BLT_API_KEY, model=BLT_MODEL)
 
 DEFAULT_DOCS_CONCURRENCY = 4
 
 
 def call_blt_text(
-    client: BltClient,
+    client: LLMClient,
     messages: List[Dict[str, str]],
     temperature: float,
     max_tokens: int,
@@ -563,7 +570,7 @@ def upsert_glance_block_in_text(md_text: str, glance: str) -> str:
 
 def generate_deep_summary(md_file_path: str, txt_file_path: str, max_retries: int = 3) -> str | None:
     if LLM_CLIENT is None:
-        log("[WARN] 未配置 BLT_API_KEY，跳过精读总结。")
+        log("[WARN] 未配置 LLM（请设置 LLM_MODEL+LLM_API_KEY+LLM_BASE_URL 或 BLT_API_KEY），跳过精读总结。")
         return None
     if not os.path.exists(md_file_path):
         return None
