@@ -31,6 +31,9 @@ jobs:
     timeout-minutes: 120
     env:
       BLT_API_KEY: ${{ secrets.BLT_API_KEY }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+      LLM_MODEL: ${{ secrets.LLM_MODEL }}
       BLT_REWRITE_MODEL: gemini-3-flash-preview
       BLT_RERANK_MODEL: qwen3-reranker-4b
       BLT_FILTER_MODEL: gemini-3-flash-preview-nothinking
