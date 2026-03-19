@@ -25,3 +25,40 @@ subscriptions:
     stage: A
     diff_threshold_pct: 15
   keyword_recall_mode: or
+  intent_profiles:
+    - tag: SymRL
+      description: 请帮我查找通过网络流量旁路监测进行对LLM/Agent交互的流量指纹攻击（将对网站指纹的研究对象从网站换成LLM/Agent）的论文
+      enabled: true
+      keywords:
+        - keyword: LLM
+          keyword_cn: 大型语言模型
+          query: large language models and their interactions
+        - keyword: agent
+          keyword_cn: 智能体
+          query: autonomous agents in computing systems
+        - keyword: side-channel monitoring
+          keyword_cn: 旁路监测
+          query: observing unintended information leaks through indirect means
+        - keyword: fingerprint attacks
+          keyword_cn: 指纹攻击
+          query: attacks based on analyzing and exploiting traffic patterns
+        - keyword: traffic analysis
+          keyword_cn: 流量分析
+          query: examination of network traffic for security or research purposes
+      intent_queries:
+        - query: traffic fingerprint attacks on LLM and agent interactions
+          query_cn: LLM和智能体交互的流量指纹攻击
+          enabled: true
+          source: manual
+          note: ''
+        - query: side channel network traffic monitoring for fingerprinting LLM communications
+          query_cn: 通过旁路网络流量监测进行LLM通信指纹识别
+          enabled: true
+          source: manual
+          note: ''
+        - query: applying website fingerprinting research to large language models and agents
+          query_cn: 将网站指纹研究应用于大型语言模型和智能体
+          enabled: true
+          source: manual
+          note: ''
+      updated_at: '2026-03-19T10:08:49.739Z'
