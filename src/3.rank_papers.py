@@ -322,12 +322,18 @@ def process_file(
         log(
           f"[INFO] 发送批次 {batch_idx}/{len(batches)} | docs={len(batch_docs)}"
         )
-        response = reranker.rerank(
-          query=q_text,
-          documents=batch_docs,
-          top_n=len(batch_docs),
-          model=rerank_model,
-        )
+        try:
+          response = reranker.rerank(
+            query=q_text,
+            documents=batch_docs,
+            top_n=len(batch_docs),
+            model=rerank_model,
+          )
+        except Exception as rerank_err:
+          log(
+            f"[WARN] 批次 {batch_idx}/{len(batches)} rerank 请求全部失败，跳过本批次：{rerank_err}"
+          )
+          break
         if isinstance(response, dict) and "output" in response:
           results = response.get("output", {}).get("results", [])
         else:

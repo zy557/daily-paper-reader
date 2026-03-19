@@ -457,7 +457,7 @@ class BltClient(LLMClient):
                     "documents": len(documents),
                     "top_n": payload.get("top_n"),
                 })
-                if e.response is not None:
+                if hasattr(e, 'response') and e.response is not None:
                     try:
                         print("错误详情(JSON):", e.response.json())
                     except ValueError:
