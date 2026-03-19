@@ -661,26 +661,41 @@ window.SubscriptionsSmartQuery = (function () {
         if (!src) return;
         if (src.includes('/chat/completions')) {
           pushUnique(src);
-          pushUnique(src.replace(/\/chat\/completions$/, '/v1/chat/completions'));
+          // Only add the /v1/chat/completions variant when the URL does not already
+          // end with /vN/chat/completions to avoid generating double /v1/ paths
+          // (e.g. https://api.deepseek.com/v1/v1/chat/completions).
+          if (!/\/v\d+\/chat\/completions$/i.test(src)) {
+            pushUnique(src.replace(/\/chat\/completions$/, '/v1/chat/completions'));
+          }
           return;
         }
         if (/\/v\d+$/i.test(src)) {
           pushUnique(`${src}/chat/completions`);
-          pushUnique(`${src}/v1/chat/completions`);
+          // Only add the bare /v1/chat/completions variant when the URL does not
+          // already end with /v1 to avoid the /v1/v1/chat/completions duplicate.
+          if (!/\/v1$/i.test(src)) {
+            pushUnique(`${src}/v1/chat/completions`);
+          }
           return;
         }
         pushUnique(`${src}/v1/chat/completions`);
         pushUnique(`${src}/chat/completions`);
       };
 
-      expandEndpoint('https://hk-api.gptbest.vip');
-      expandEndpoint('https://api.bltcy.ai');
-
       const raw = normalizeText(llm.baseUrl);
-      if (!raw) {
+      if (raw) {
+        // User has a configured baseUrl: use only their URL so that hardcoded
+        // third-party proxy endpoints are not tried with a foreign API key.
+        // Sending a DeepSeek (or other provider) key to proxy services that
+        // don't recognise it causes HTTP 401 responses, which then overwrite
+        // fetchError and produce a confusing error message for the user.
+        expandEndpoint(raw);
         return out;
       }
-      expandEndpoint(raw);
+
+      // No user-configured URL: fall back to the hardcoded default endpoints.
+      expandEndpoint('https://hk-api.gptbest.vip');
+      expandEndpoint('https://api.bltcy.ai');
       return out;
     };
     const endpoints = buildEndpoints();
@@ -780,6 +795,10 @@ window.SubscriptionsSmartQuery = (function () {
                 useResponseFormat: false,
                 includeTools: true,
               });
+              // Refresh txt so the tools-retry check below uses the new response body.
+              if (current && !current.ok) {
+                txt = await current.text().catch(() => '');
+              }
             }
             if (current && !current.ok && current.status === 400 && /tool_choice|tools/i.test(txt)) {
               current = await doFetchWithFallbackHeader(endpoint, {
