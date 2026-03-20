@@ -84,6 +84,7 @@ jobs:
           HF_HOME: ${{ github.workspace }}/hf_cache
           HUGGINGFACE_HUB_CACHE: ${{ github.workspace }}/hf_cache
           HF_HUB_DISABLE_SYMLINKS: "1"
+          TRANSFORMERS_CACHE: ${{ github.workspace }}/hf_cache
         run: |
           echo "Cleaning any previous local cache..."
           rm -rf ${{ github.workspace }}/hf_cache
